@@ -33,13 +33,21 @@ export default class Workspace extends Base {
             "x": 209.5,
             "y": 157.5
           },
-          "height": 104.5,
-          "width": 19.5,
           "points": [{
-            "x": 9.5,
-            "y": 94.5
+            "x": 208.5,
+            "y": 250
           }],
-          "completed": false
+          "completed": false,
+          "initialPoints": [{
+              "x": 208.5,
+              "y": 158
+            },
+            {
+              "x": 208.5,
+              "y": 250
+            }
+          ],
+          "crossed": false
         }],
         "in": [],
         "position": {
@@ -60,17 +68,25 @@ export default class Workspace extends Base {
           "direction": "right",
           "destination": "comp-465141",
           "position": {
-            "x": 279,
-            "y": 309.5
+            "x": 282.5,
+            "y": 310
           },
-          "height": 21.5,
-          "width": 116,
           "points": [{
-            "x": 106,
-            "y": 11.5
+            "x": 380,
+            "y": 310
           }],
-          "action": "yes",
-          "completed": false
+          "completed": false,
+          "condition": "Yes",
+          "initialPoints": [{
+              "x": 282.5,
+              "y": 310
+            },
+            {
+              "x": 380,
+              "y": 310
+            }
+          ],
+          "crossed": false
         }],
         "in": [{
           "direction": "top",
@@ -94,16 +110,24 @@ export default class Workspace extends Base {
           "direction": "bottom",
           "destination": "comp-067317",
           "position": {
-            "x": 424.5,
-            "y": 333.5
+            "x": 423.5,
+            "y": 333
           },
-          "height": 92.5,
-          "width": 21.5,
           "points": [{
-            "x": 11.5,
-            "y": 82.5
+            "x": 423.5,
+            "y": 409
           }],
-          "completed": false
+          "completed": false,
+          "initialPoints": [{
+              "x": 423.5,
+              "y": 333
+            },
+            {
+              "x": 423.5,
+              "y": 409
+            }
+          ],
+          "crossed": false
         }],
         "in": [{
           "direction": "left",
@@ -128,16 +152,24 @@ export default class Workspace extends Base {
           "destination": "comp-171995",
           "position": {
             "x": 492.5,
-            "y": 473.5
+            "y": 470.5
           },
-          "height": 20.5,
-          "width": 142.5,
           "points": [{
-            "x": 132.5,
-            "y": 10.5
+            "x": 622,
+            "y": 470.5
           }],
-          "action": "yes",
-          "completed": false
+          "completed": false,
+          "condition": "Yes",
+          "initialPoints": [{
+              "x": 492.5,
+              "y": 470.5
+            },
+            {
+              "x": 622,
+              "y": 470.5
+            }
+          ],
+          "crossed": false
         }],
         "in": [{
           "direction": "top",
@@ -339,7 +371,9 @@ export default class Workspace extends Base {
       tempDirections = [this.getOppositeDirection(currentLineDirection)];
     }
     this.getAvailableDirections(this.tempComp).map(direction => {
-      tempDirections.splice(tempDirections.indexOf(direction), 1)
+      if (tempDirections.indexOf(direction) !== -1) {
+        tempDirections.splice(tempDirections.indexOf(direction), 1)
+      }
     });
     tempDirections.map(direction => {
       e.target.appendChild(this.addNode(direction, 'temp'));
@@ -393,36 +427,39 @@ export default class Workspace extends Base {
     return createdNode;
   }
 
-  addConditionLabel(direction, isTemp) {
+  addConditionLabel(line, isTemp) {
     if (!this.component) {
       return this.ce('span');
     }
-    const labelText = this.component.out.length === 0 ? 'Yes' : 'No';
-    this.line.condition = labelText;
-    var conditionStyle =
-      'width: 15px; height: 15px; position: absolute; cursor: default;';
-    let labelTransform;
-    if (direction === 'top') {
-      labelTransform = 'translate(-40px, -10px)';
-    } else if (direction === 'right') {
-      labelTransform = 'translate(5px, -40px)';
-    } else if (direction === 'bottom') {
-      labelTransform = 'translate(25px, -10px)';
+    const labelText = line.condition || this.component.out.length === 0 ? 'Yes' : 'No';
+    line.condition = labelText;
+    let transformX = line.position.x;
+    let transformY = line.position.y;
+    if (line.direction === 'top') {
+      transformX -= 20;
+      transformY -= 5;
+    } else if (line.direction === 'right') {
+      transformX += 20;
+      transformY -= 5;
+    } else if (line.direction === 'bottom') {
+      transformX += 25;
+      transformY -= 5;
     } else {
-      labelTransform = 'translate(-40px, -5px)';
+      transformX -= 20;
+      transformY -= 3;
     }
-    labelTransform += ' rotate(-45deg)'
-    var createdLabel = this.ce('div', {
-      id: 'condition-' + `${this.component.id}-${direction}`,
+    var createdLabel = this.ce('text', {
+      id: 'condition',
       class: 'condition-' + `${isTemp ? isTemp+' temp': this.component.id}`,
-      style: conditionStyle,
-      ['data-direction']: direction,
+      x: transformX,
+      y: transformY,
+      fill: 'red',
+      ['data-direction']: line.direction,
       nativeStyle: {
         'font-size': 'inherit',
         fill: 'black',
         stroke: 'none',
         'text-anchor': 'middle',
-        transform: labelTransform
       },
       keys: {
         innerHTML: labelText
@@ -517,7 +554,7 @@ export default class Workspace extends Base {
       x: e.offsetX,
       y: e.offsetY
     }
-    if (e.target.id.indexOf('workspace') != 0) {
+    if (e.target.parentElement.id.indexOf('workspace') != 0) {
       offsetCalc.x = e.x - rect.x;
       offsetCalc.y = e.y - rect.y;
     }
@@ -544,6 +581,7 @@ export default class Workspace extends Base {
   }
 
   initCompMove(e) {
+    this.crossed = false;
     this.offset.x = (this.current.x + e.offsetX * this.current.zoom);
     this.offset.y = (this.current.y + e.offsetY * this.current.zoom);
   }
@@ -566,7 +604,15 @@ export default class Workspace extends Base {
       };
       if (this.component.out.length) {
         this.component.out.forEach(line => {
-          this.moveLines(line, compOffset, 'source', e);
+          this.flows.forEach(component => {
+            if (component.id === line.destination) {
+              component.in.forEach(comp => {
+                if (comp.source === this.component.id) {
+                  this.offsetCompLines(line, this.component, component, comp, compOffset, 'source');
+                }
+              });
+            }
+          });
         });
       }
       if (this.component.in.length) {
@@ -575,7 +621,7 @@ export default class Workspace extends Base {
             if (component.id === comp.source) {
               component.out.forEach(line => {
                 if (line.destination === this.component.id) {
-                  this.moveLines(line, compOffset, 'destination', e);
+                  this.offsetCompLines(line, component, this.component, comp, compOffset, 'destination');
                 }
               });
             }
@@ -587,58 +633,142 @@ export default class Workspace extends Base {
     }
   }
 
-  moveLines(line, offset, compSide, e) {
+  offsetCompLines(line, sourceComp, destinationComp, comp, compOffset, compSide) {
+    const initialQuadrant = this.getDestinationQuadrant(line.initialPoints[0], line.initialPoints[line.initialPoints.length - 1]);
+    const currentQuadrant = this.getDestinationQuadrant(line.position, line.points[line.points.length - 1]);
+    this.moveLines(line, compOffset, compSide, comp);
+    if (initialQuadrant !== currentQuadrant || this.crossed) {
+      this.crossed = true;
+      this.setLinePoints(line, line.direction, comp.direction);
+      this.validateDirections(line, sourceComp, destinationComp, comp, initialQuadrant, currentQuadrant);
+    }
+  }
+
+  validateDirections(line, sourceComp, destinationComp, comp, initialQuadrant, currentQuadrant) {
+    const sourceDirection = line.direction;
+    const destDirection = comp.direction;
+    const compCenter = this.getCompCenterFromNodePosition(line.points[line.points.length - 1], destinationComp, destDirection);
+    const {
+      source: newSourceDirection,
+      destination: newDestDirection
+    } = this.getNewDirections(line, compCenter, sourceDirection, initialQuadrant, currentQuadrant);
+
+    // Change Source Direction
+    if (newSourceDirection && sourceDirection !== newSourceDirection) {
+      line.position = this.getNodeOffset(component.position, component.type, newDirection);
+      line.direction = newDirection;
+      this.changeNodeDirection(sourceComp, sourceDirection, newSourceDirection);
+    }
+
+    // Change Destination Direction
+    if (newDestDirection && newDestDirection !== destDirection) {
+      line.points[line.points.length - 1] =
+        this.getNodeOffset(destinationComp.position, destinationComp.type, newDestDirection);
+      comp.direction = newDestDirection;
+      this.changeNodeDirection(destinationComp, destDirection, newDestDirection);
+    }
+  };
+
+  // Method to remove old Node and add new permanent node to the component.
+  changeNodeDirection(component, oldDirection, newDirection) {
+    const element = document.getElementById(component.id);
+    const node = document.getElementById(`node-${component.id}-${oldDirection}`);
+    if (node) {
+      node.remove();
+    }
+    const temp = this.tempComp;
+    this.tempComp = component;
+    element.appendChild(this.addNode(newDirection, true));
+    this.tempComp = temp;
+  }
+
+  // Method to validate component position and obtain new directions if change is required.
+  getNewDirections(line, compCenter, sourceDirection, initialQuadrant, currentQuadrant) {
+    let source, destination;
+    const destinationQuadrant = this.getDestinationQuadrant(line.position, compCenter);
+    const initialDestinationDirection = this.getLineDirection(line.initialPoints[line.initialPoints.length - 1], line.initialPoints[line.initialPoints.length - 2]);
+    if (this.getNeighbouringQuadrants(sourceDirection).indexOf(destinationQuadrant) !== -1) {
+      if (sourceDirection !== destinationQuadrant) {
+        if (line.points.length === 2 && initialQuadrant !== currentQuadrant) {
+          destination = initialDestinationDirection;
+        } else {
+          destination = this.getOppositeDirection(initialDestinationDirection);
+        }
+      } else {
+        destination = this.getOppositeDirection(sourceDirection);
+      }
+    } else {
+      destination = sourceDirection;
+    }
+    return {
+      source,
+      destination
+    }
+  }
+
+  // Method to move lines. Checks which lines to increace/decrease on mouseMove.
+  moveLines(line, offset, compSide, comp) {
     this.lineElement = document.getElementById(line.id);
+    if (line.points.length === 1 && this.areParallelDirections(line.direction, comp.direction) && !this.crossed) {
+      let midpoint = {};
+      if (this.isVertical(line.direction)) {
+        midpoint.y = (line.position.y + line.points[line.points.length - 1].y) / 2;
+      } else {
+        midpoint.x = (line.position.x + line.points[line.points.length - 1].x) / 2;
+      }
+      this.breakLines(line, midpoint, 3);
+    }
     let {
       minIndex,
       maxIndex
     } = this.getLongestAndShortestIndex([line.position, ...line.points], line.direction);
-    if ((line.points.length === 1) && ((this.isVertical(line.direction) && offset.x) ||
-        (this.isHorizontal(line.direction) && offset.y))) {
-      this.breakLines(line, 3);
+    let index;
+    if (line.direction === comp.direction) {
+      index = 2;
+    } else {
+      index = (line.direction === 'bottom' && offset.y > 0) || (line.direction === 'top' && offset.y < 0) ||
+        (line.direction === 'right' && offset.x > 0) || (line.direction === 'left' && offset.x < 0) ?
+        minIndex : maxIndex;
     }
-    const index = (line.direction === 'bottom' && offset.y > 0) ||
-      (line.direction === 'top' && offset.y < 0) ||
-      (line.direction === 'right' && offset.x > 0) ||
-      (line.direction === 'left' && offset.x < 0) ? minIndex : maxIndex;
     this.handleLineDisplacement(line, compSide, offset, index);
-    if (compSide === 'source') {
-      line.position.x += offset.x;
-      line.position.y += offset.y;
-    }
     this.drawLine(line);
   }
 
-  breakLines(line, numberOfLines) {
-    if (numberOfLines === 3) {
-      let midpoint = {};
+  // Method to set the points ignoring user Configurations.
+  setLinePoints(line, sourceDirection, destinationDirection) {
+    const isSameDirection = sourceDirection === destinationDirection;
+    let point;
+    let midpoint = {};
+    if ((line.points.length === 3) &&
+      ((this.isVertical(line.direction) && Math.abs(line.position.x - line.points[line.points.length - 1].x) <= 1) ||
+        (this.isHorizontal(line.direction) && Math.abs(line.position.y - line.points[line.points.length - 1].y) <= 1))) {
+      line.points.splice(0, line.points.length - 1);
+    } else if (this.areParallelDirections(sourceDirection, destinationDirection)) {
       if (this.isVertical(line.direction)) {
-        midpoint.y = (line.position.y + line.points[0].y) / 2;
+        if (line.direction === 'top') {
+          point = Math.min(line.position.y, line.points[line.points.length - 1].y) - 100;
+        } else {
+          point = Math.max(line.position.y, line.points[line.points.length - 1].y) + 100;
+        }
+        midpoint.y = isSameDirection ? point : (line.position.y + line.points[line.points.length - 1].y) / 2;
       } else {
-        midpoint.x = (line.position.x + line.points[0].x) / 2;
+        if (line.direction === 'left') {
+          point = Math.min(line.position.x, line.points[line.points.length - 1].x) - 100;
+        } else {
+          point = Math.max(line.position.x, line.points[line.points.length - 1].x) + 100;
+        }
+        midpoint.x = isSameDirection ? point : (line.position.x + line.points[line.points.length - 1].x) / 2;
       }
-      line.points = [{
-        x: midpoint.x || line.position.x,
-        y: midpoint.y || line.position.y
-      }, {
-        x: midpoint.x || line.points[0].x,
-        y: midpoint.y || line.points[0].y
-      }, {
-        x: line.points[0].x,
-        y: line.points[0].y
-      }];
-    } else if (numberOfLines === 2) {
-      line.points = [{
-        x: this.isVertical(line.direction) ? line.position.x : line.points[0].x,
-        y: this.isVertical(line.direction) ? line.points[0].y : line.position.y
-      }, {
-        x: line.points[0].x,
-        y: line.points[0].y
-      }];
+      this.breakLines(line, midpoint, 3);
+    } else {
+      midpoint = {
+        x: this.isHorizontal(line.direction) && line.points[line.points.length - 1].x,
+        y: this.isVertical(line.direction) && line.points[line.points.length - 1].y
+      };
+      this.breakLines(line, midpoint, 2);
     }
   }
-
-
+  
   handleLineDisplacement(line, compSide, offset, index) {
     for (let i = 0; i < line.points.length; i++) {
       if (compSide === 'destination') {
@@ -665,8 +795,150 @@ export default class Workspace extends Base {
         }
       }
     }
+    if (compSide === 'source') {
+      line.position.x += offset.x;
+      line.position.y += offset.y;
+    }
   }
 
+  breakLines(line, midpoint, numberOfLines) {
+    if (numberOfLines === 3) {
+      line.points = [{
+        x: midpoint.x || line.position.x,
+        y: midpoint.y || line.position.y
+      }, {
+        x: midpoint.x || line.points[line.points.length - 1].x,
+        y: midpoint.y || line.points[line.points.length - 1].y
+      }, {
+        x: line.points[line.points.length - 1].x,
+        y: line.points[line.points.length - 1].y
+      }];
+    } else if (numberOfLines === 2) {
+      line.points = [{
+        x: midpoint.x || line.position.x,
+        y: midpoint.y || line.position.y
+      }, {
+        x: line.points[line.points.length - 1].x,
+        y: line.points[line.points.length - 1].y
+      }];
+    }
+  }
+
+  getCompCenterFromNodePosition(position, destinationComp, direction) {
+    const {
+      width,
+      height
+    } = this.getCompDimensions(destinationComp.type);
+    const newPosition = {
+      ...position
+    };
+    if (direction === 'top') {
+      newPosition.y += height / 2;
+    } else if (direction === 'bottom') {
+      newPosition.y -= height / 2;
+    } else if (direction === 'left') {
+      newPosition.x += width / 2;
+    } else if (direction === 'right') {
+      newPosition.x -= width / 2;
+    }
+    return newPosition;
+  }
+
+  getNeighbouringQuadrants(sourceDirection) {
+    const directions = [1, 'top', 2, 'left', 3, 'bottom', 4, 'right', 1];
+    const index = directions.indexOf(sourceDirection);
+    if (index === -1) {
+      return null;
+    } else if (index === 0) {
+      return [directions[0], directions[directions.length - 2], 1];
+    } else {
+      return [directions[index - 1], directions[index], directions[index + 1]];
+    }
+  }
+
+  getDestinationQuadrant(start, end) {
+    const offset = 100;
+    let quadrant;
+    if (end.x > start.x + offset) {
+      if (end.y > start.y + offset) {
+        quadrant = 4;
+      } else if (end.y < start.y - offset) {
+        quadrant = 1;
+      } else if ((end.y <= start.y + offset) && (end.y >= start.y - offset)) {
+        quadrant = 'right';
+      }
+    } else if (end.x < start.x - offset) {
+      if (end.y > start.y + offset) {
+        quadrant = 3;
+      } else if (end.y < start.y - offset) {
+        quadrant = 2;
+      } else if ((end.y <= start.y + offset) && (end.y >= start.y - offset)) {
+        quadrant = 'left';
+      }
+    } else if ((end.x <= start.x + offset) && (end.x >= start.x - offset)) {
+      if (end.y < start.y - offset) {
+        quadrant = 'top';
+      } else if (end.y > start.y + offset) {
+        quadrant = 'bottom';
+      } else {
+        quadrant = 0;
+      }
+    }
+    return quadrant;
+  }
+
+  getNodeOffset(position, type, direction) {
+    const {
+      width,
+      height
+    } = this.getCompDimensions(type);
+    if (direction === 'top') {
+      return {
+        x: position.x + width / 2,
+        y: position.y
+      };
+    } else if (direction === 'right') {
+      return {
+        x: position.x + width,
+        y: position.y + height / 2
+      };
+    } else if (direction === 'left') {
+      return {
+        x: position.x,
+        y: position.y + height / 2
+      };
+    } else if (direction === 'bottom') {
+      return {
+        x: position.x + width / 2,
+        y: position.y + height
+      };
+    } else {
+      return null;
+    }
+  }
+
+  getCompDimensions(type) {
+    let width = 0;
+    let height = 0;
+    if (type === 'event') {
+      width = 100;
+      height = 100;
+    } else if (type === 'action') {
+      width = 100;
+      height = 50;
+    } else if (type === 'condition') {
+      width = 141.5;
+      height = 141.5;
+    } else {
+      return null;
+    }
+    return {
+      width,
+      height
+    }
+  }
+
+  // Utility method to check which point index to increace/decrease on mouseMove.
   getLongestAndShortestIndex(points, direction) {
     let max = 0;
     let min = Infinity;
@@ -733,6 +1005,11 @@ export default class Workspace extends Base {
     return direction === 'left' || direction === 'right';
   }
 
+  areParallelDirections(firstDirection, secondDirection) {
+    return this.isVertical(firstDirection) && this.isVertical(secondDirection) ||
+      (this.isHorizontal(firstDirection) && this.isHorizontal(secondDirection))
+  }
+
   endCompMove(e) {
     this.offset = {};
     this.component.position.x = Math.round(this.component.position.x / 5) * 5;
@@ -766,9 +1043,6 @@ export default class Workspace extends Base {
       }],
       completed: false
     }
-    if (this.component.type === 'condition') {
-      this.highlighted.appendChild(this.addConditionLabel(this.line.direction, false));
-    }
     this.prevPoint = {
       ...this.line.position,
       modified: this.line.direction === 'top' || this.line.direction === 'bottom' ? 'vertical' : 'horizontal'
@@ -791,6 +1065,7 @@ export default class Workspace extends Base {
         tag: 'path'
       }, {
         id: 'path',
+        class: 'path-1',
         nativeStyle: {
           strokeWidth: 3,
           opacity: 1,
@@ -841,10 +1116,8 @@ export default class Workspace extends Base {
       } else if ((Math.abs(displaceY) < 30) && currPointIndex > 0 &&
         this.prevPoint.modified === 'vertical') {
         this.line.points.pop();
-        this.prevPoint = {
-          ...this.line.points[currPointIndex - 1],
-          modified: 'horizontal'
-        }
+        this.prevPoint = currPointIndex > 1 ? this.line.points[currPointIndex - 1] : this.line.position;
+        this.prevPoint.modified = 'horizontal';
         return;
       }
       if (((Math.abs(displaceX) > 30)) && !modified) {
@@ -864,10 +1137,8 @@ export default class Workspace extends Base {
       } else if ((Math.abs(displaceX) < 30) && !modified && currPointIndex > 0 &&
         this.prevPoint.modified === 'horizontal') {
         this.line.points.pop();
-        this.prevPoint = {
-          ...this.line.points[currPointIndex - 1],
-          modified: 'vertical'
-        }
+        this.prevPoint = currPointIndex > 1 ? this.line.points[currPointIndex - 1] : this.line.position;
+        this.prevPoint.modified = 'vertical';
         return;
       }
     }
@@ -875,14 +1146,39 @@ export default class Workspace extends Base {
   }
 
   drawLine(line, e) {
-    const {
-      linePath,
-      arrowPath
-    } = this.getPoints(line);
-    this.ce(this.lineElement.querySelector('#path'), {
-      stroke: 'orangered',
-      ['stroke-dasharray']: e ? '5.5' : '',
-      d: linePath,
+    const linePath = this.getLinePath(line);
+    const arrowPath = this.getArrowPath(line);
+    if (this.component.type === 'condition') {
+      const textElem = this.lineElement.querySelector('#condition');
+      if (!textElem) {
+        this.lineElement.appendChild(this.addConditionLabel(line, false));
+      }
+    }
+    linePath.forEach((line, index) => {
+      if (!this.lineElement.querySelector(`.path-${index+1}`)) {
+        this.ac(this.lineElement, this.ce({
+          namespace: 'http://www.w3.org/2000/svg',
+          tag: 'path'
+        }, {
+          id: 'path',
+          class: `path-${index+1}`,
+          nativeStyle: {
+            strokeWidth: 3,
+            opacity: 1,
+            fill: 'none'
+          }
+        }));
+      }
+      this.ce(this.lineElement.querySelector(`.path-${index+1}`), {
+        stroke: 'orangered',
+        ['stroke-dasharray']: e ? '5.5' : '',
+        d: line,
+      });
+    });
+    this.lineElement.querySelectorAll('#path').forEach(path => {
+      if (Number(path.classList[0].split('path-')[1]) > linePath.length) {
+        path.remove();
+      }
     });
     this.ce(this.lineElement.querySelector('#arrow'), {
       d: arrowPath,
@@ -894,66 +1190,82 @@ export default class Workspace extends Base {
     }
   }
 
-  getPoints(line) {
+  getLinePath(line) {
+    let lines = [];
+    const {
+      x,
+      y
+    } = line.points[0];
+    if (x === 0 && y === 0) {
+      return lines;
+    }
     let nx = line.position.x;
     let ny = line.position.y;
     let offsetX = 0;
     let offsetY = 0;
-    let linePath = ``;
+    if (this.isVertical(line.direction)) {
+      offsetX = 6;
+    } else {
+      offsetY = 6;
+    }
+    let linePath = `M ${nx + offsetX} ${ny + offsetY}`;
+    line.points.forEach(point => {
+      lines.push(`${linePath} L ${point.x + offsetX} ${point.y + offsetY}`);
+      linePath = `M ${point.x + offsetX} ${point.y + offsetY}`;
+    });
+    return lines;
+  }
+
+
+  getArrowPath(line) {
     let arrowPath = ``;
     const {
       x,
       y
     } = line.points[0];
     if (x === 0 && y === 0) {
-      return {
-        linePath,
-        arrowPath
-      };
+      return arrowPath;
     }
+    let nx = line.position.x;
+    let ny = line.position.y;
     switch (line.direction) {
       case 'top':
-        offsetX = 6;
         arrowPath = (`M ${2.5 + nx} ${(y/2) + ny/2} L ${nx + 6.25} ${(y/2) + ny/2 - 7.5} 
                       L ${nx + 10} ${y/2 + ny/2} z`);
         break;
       case 'right':
-        offsetY = 6;
         arrowPath = (`M ${(x/2) + nx/2} ${2.5 + ny} L ${(x/2) + nx/2 + 7.5 } ${6.25 + ny}
                       L ${(x/2) + nx/2} ${ny + 10} z`);
         break;
       case 'bottom':
-        offsetX = 6;
         arrowPath = (`M ${2.5 + nx} ${(y/2) + ny/2} L ${6.25 + nx} ${(y/2) + ny/2 + 7.5} 
                       L ${10 + nx} ${(y/2) + ny/2} z`);
         break;
       case 'left':
-        offsetY = 6;
         arrowPath = (`M ${(x/2) + nx/2} ${2.5 + ny} L ${(x/2) + nx/2 - 7.5} ${6.25 + ny}
                       L ${(x/2) + nx/2} ${10 + ny} z`);
         break;
       default:
         break;
     }
-    linePath = line.points.reduce((acc, point) => {
-      return acc += ` L ${point.x + offsetX} ${point.y + offsetY}`;
-    }, `M ${nx + offsetX} ${ny + offsetY}`);
-    return {
-      linePath,
-      arrowPath
-    };
+    return arrowPath;
   }
 
   endLineDraw(e) {
     this.offset = {};
     const destination = this.highlighted && this.highlighted.dataset;
     if (destination && destination.comp !== this.component.id) {
-      this.ce(this.lineElement.querySelector('#path'), {
-        ['stroke-dasharray']: ''
-      });
+      let index = 0;
+      while (index < this.line.points.length) {
+        this.ce(this.lineElement.querySelector(`.path-${index+1}`), {
+          ['stroke-dasharray']: ''
+        });
+        index++;
+      };
       this.lineElement.style.cursor = 'default';
       e.target.parentElement.classList.remove('temp');
       this.line.destination = destination.comp;
+      this.line.initialPoints = JSON.parse(JSON.stringify([this.line.position, ...this.line.points]));
       this.component.out.push(this.line);
       this.getComponentById(this.flows, destination.comp).in.push({
         direction: destination.direction,
@@ -1000,7 +1312,7 @@ export default class Workspace extends Base {
       namespace: 'http://www.w3.org/2000/svg',
       tag: 'svg'
     }, {
-      id: 'allSvg',
+      id: 'svg',
       class: 'svg',
       style: 'position: absolute; z-index: -2;',
       width: '100%',
