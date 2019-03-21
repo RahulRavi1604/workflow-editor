@@ -200,6 +200,10 @@ export default class Workspace extends Base {
         "type": "action"
       }
     ];
+    this.changes = [];
+    this.undoIndex = 0;
+    this.selectMode = 'Move';
+    this.selectedComp = [];
     document.addEventListener("componentUpdate", this.componentUpdate.bind(this), false);
   }
 
@@ -288,6 +292,7 @@ export default class Workspace extends Base {
       component.position.y += 20;
     }
     this.flows.push(component);
+    this.addNewChanges(this.flows);
     this.workspace.appendChild(this.placeComponent(component));
     if (this.modal) {
       this.modal.remove();
@@ -298,7 +303,7 @@ export default class Workspace extends Base {
 
   placeComponent(comp) {
     this.component = comp;
-    var wrapperStyle = 'position: absolute; border: #faebd7; box-shadow: 2px 2px 4px #393939;';
+    var wrapperStyle = 'position: absolute; border: #faebd7;';
     var compStyle =
       'position: relative; width: 100px; height: 100px; color: black; display: flex; align-items: center; justify-content: center;'
     if (comp.type === 'event') {
@@ -314,19 +319,26 @@ export default class Workspace extends Base {
     var compChildren = [
       this.ce('span', {
         id: 'label-' + `${this.component.id}`,
-        style: 'text-transform: capitalize;' +
-          `${comp.type === 'condition' ? 'transform: rotate(-45deg)': ''}`,
+        style: `text-transform: capitalize;
+        text-overflow: ellipsis;
+        overflow-wrap: break-word;
+        overflow: hidden;
+        white-space: nowrap;
+        ${comp.type === 'condition' ? 'transform: rotate(-45deg)': ''}`,
         keys: {
           innerHTML: comp.label
         }
       })
     ];
-    compChildren.push(this.getAvailableDirections(comp).map((line) => this.addNode(line)));
+    // compChildren.push(this.getAvailableDirections(comp).map((line) => this.addNode(line)));
     comp.out.map(line => this.createLineGroup(line));
 
     var wrappedComp = this.ce('div', {
       id: comp.id,
       style: wrapperStyle,
+      keys: {
+        title: comp.label
+      },
       on: {
         dblclick: this.openModal.bind(this),
         mouseover: this.showNodes.bind(this),
@@ -347,6 +359,22 @@ export default class Workspace extends Base {
     }
     this.component = this.getComponentById(this.flows, componentId);
     this.workspace.parentNode.appendChild(new Modal(this.component).open());
+  }
+
+  showSelectionNodes(component, element) {
+    if (component.type === 'condition') {
+      if (!(this.lineElement && this.line) && component.out && component.out.length >= 2) {
+        return;
+      } else if (this.lineElement && this.line && component.in.length >= 1) {
+        return;
+      }
+    }
+    ['top', 'right', 'bottom', 'left'].map(direction => {
+      this.component = component;
+      element.appendChild(this.addNode(direction, false, true));
+      element.style.backgroundColor = '#dbdbdb';
+    });
+    this.component = null;
   }
 
   showNodes(e) {
@@ -370,11 +398,11 @@ export default class Workspace extends Base {
         currPointIndex === 0 ? this.line.position : this.line.points[currPointIndex - 1]);
       tempDirections = [this.getOppositeDirection(currentLineDirection)];
     }
-    this.getAvailableDirections(this.tempComp).map(direction => {
-      if (tempDirections.indexOf(direction) !== -1) {
-        tempDirections.splice(tempDirections.indexOf(direction), 1)
-      }
-    });
+    // this.getAvailableDirections(this.tempComp).map(direction => {
+    //   if (tempDirections.indexOf(direction) !== -1) {
+    //     tempDirections.splice(tempDirections.indexOf(direction), 1)
+    //   }
+    // });
     tempDirections.map(direction => {
       e.target.appendChild(this.addNode(direction, 'temp'));
     });
@@ -397,7 +425,7 @@ export default class Workspace extends Base {
     this.tempComp = null;
   }
 
-  addNode(direction, isTemp) {
+  addNode(direction, isTemp, isSelected) {
     const comp = isTemp ? this.tempComp : this.component;
     var nodeStyle =
       'width: 15px; height: 15px; position: absolute; z-index: -1; border-radius: 50%; cursor: crosshair;';
@@ -413,7 +441,7 @@ export default class Workspace extends Base {
     }
     var createdNode = this.ce('div', {
       id: `node-${comp.id}-${direction}`,
-      class: 'node-' + `${isTemp ? isTemp+' temp': comp.id}`,
+      class: 'node-' + `${isTemp ? isTemp+' temp': comp.id}` + `${isSelected ? ' selected ' : ''}`,
       style: nodeStyle,
       ['data-comp']: comp.id,
       ['data-direction']: direction
@@ -496,9 +524,25 @@ export default class Workspace extends Base {
       return;
     }
     this.setElemByEvent(e);
+    if (this.element.id.indexOf('comp') !== 0 && this.selectedComp.length) {
+      this.selectedComp.forEach((component) => {
+        const element = this.getElementById(component.id);
+        element.style.backgroundColor = '#ffff';
+        element.firstChild.style.backgroundColor = '#ffff';
+        const tempNodes = element.firstChild.getElementsByClassName('selected');
+        while (tempNodes.length > 0) {
+          tempNodes[0].remove();
+        }
+      });
+      this.selectedComp = [];
+    }
     if (this.element.id.indexOf('workspace') === 0) {
-      this.element.style.cursor = 'grabbing';
-      this.initWorkspaceMove(e);
+      if (this.selectMode === 'Move') {
+        this.element.style.cursor = 'grabbing';
+        this.initWorkspaceMove(e);
+      } else {
+        this.initMultiSelect(e);
+      }
     } else if (this.element.id.indexOf('comp') === 0) {
       for (let i = 0; i < this.flows.length; i++) {
         if (this.flows[i].id === this.element.id) {
@@ -510,19 +554,115 @@ export default class Workspace extends Base {
       this.initCompMove(e);
     } else if (this.element.id.indexOf('node') === 0) {
       this.component = this.getComponentById(this.flows, this.element.dataset.comp)
-      e.target.parentElement.classList.remove('temp');
+      // e.target.parentElement.classList.remove('temp');
       this.initLineDraw(e);
     }
   }
 
+  initMultiSelect(e) {
+    this.selector = {
+      x: e.layerX,
+      y: e.layerY
+    };
+    this.ac(this.svg, this.ce({
+      namespace: 'http://www.w3.org/2000/svg',
+      tag: 'rect'
+    }, {
+      id: 'selector',
+      fill: '#abdbff',
+      stroke: 'black',
+      ['stroke-dasharray']: e ? '2' : '',
+      strokeWidth: 2,
+      opacity: 0.5,
+      nativeStyle: {
+        x: this.selector.x,
+        y: this.selector.y,
+        width: 0,
+        height: 0
+      }
+    }));
+  }
+
+  moveSelector(e) {
+    const start = {
+      ...this.selector
+    };
+    const currentPosition = {
+      x: e.layerX,
+      y: e.layerY
+    }
+    const offset = {
+      x: currentPosition.x - start.x,
+      y: currentPosition.y - start.y
+    };
+    if (offset.x < 0) {
+      start.x = currentPosition.x;
+      offset.x = Math.abs(offset.x);
+    }
+    if (offset.y < 0) {
+      start.y = currentPosition.y;
+      offset.y = Math.abs(offset.y);
+    }
+    this.ce(this.svg.querySelector('#selector'), {
+      nativeStyle: {
+        x: start.x,
+        y: start.y,
+        width: offset.x,
+        height: offset.y
+      }
+    });
+  }
+
+  endSelection(e) {
+    const selector = this.svg.querySelector('#selector');
+    if (selector) {
+      selector.remove();
+    }
+    const initial = {
+      x: Number(selector.style.x),
+      y: Number(selector.style.y)
+    };
+    const final = {
+      x: Number(selector.style.width.split('px')[0]) + initial.x,
+      y: Number(selector.style.height.split('px')[0]) + initial.y
+    };
+    this.flows.forEach(component => {
+      if (component.position.x >= initial.x && component.position.x <= final.x &&
+        component.position.y >= initial.y && component.position.y <= final.y) {
+        const element = this.getElementById(component.id).firstChild;
+        this.showSelectionNodes(component, element);
+        if (!this.selectedComp.includes(component)) {
+          this.selectedComp.push(component);
+        }
+      }
+    });
+    this.selector = null;
+  }
   mouseMove(e) {
     if (!this.element) {
       return;
     }
     if (this.element.id.indexOf('workspace') === 0) {
-      this.moveWorkspace(e);
+      if (this.selector && this.selectMode === 'Select') {
+        this.moveSelector(e);
+      } else {
+        this.moveWorkspace(e);
+      }
     } else if (this.element.id.indexOf('comp') === 0) {
-      this.moveComp(e);
+      if (this.selectedComp.length) {
+        this.selectedComp.forEach(component => {
+          this.component = component;
+          this.element = this.getElementById(component.id);
+          this.moveComp(e, true);
+        });
+        this.selector = {
+          x: e.layerX,
+          y: e.layerY
+        }
+        this.component = null;
+      } else {
+        this.moveComp(e);
+      }
     } else if (this.element.id.indexOf('node') === 0) {
       this.trackLinePoints(e);
     }
@@ -533,13 +673,32 @@ export default class Workspace extends Base {
       return;
     }
     if (this.element.id.indexOf('workspace') === 0) {
-      this.element.style.cursor = 'default';
+      if (this.selector && this.selectMode === 'Select') {
+        this.endSelection(e);
+      } else {
+        this.element.style.cursor = 'default';
+      }
       this.endWorkspaceMove(e);
+      this.addNewChanges(this.flows);
     } else if (this.element.id.indexOf('comp') === 0) {
       this.element.style.cursor = 'default';
-      this.endCompMove(e);
+      if (this.selectedComp.length) {
+        this.offset = {};
+        this.selectedComp.forEach(component => {
+          component.position.x = Math.round(component.position.x / 5) * 5;
+          component.position.y = Math.round(component.position.y / 5) * 5;
+          const element = this.getElementById(component.id);
+          element.style.transform =
+            `translate(${component.position.x}px, ${component.position.y}px) ${component.type === 'condition' ? 'rotate(45deg)' : ''}`;
+        });
+        this.selector = null;
+      } else {
+        this.endCompMove(e);
+      }
+      this.addNewChanges(this.flows);
     } else if (this.element.id.indexOf('node') === 0) {
       this.endLineDraw(e);
+      this.addNewChanges(this.flows);
     }
   }
 
@@ -584,9 +743,13 @@ export default class Workspace extends Base {
     this.crossed = false;
     this.offset.x = (this.current.x + e.offsetX * this.current.zoom);
     this.offset.y = (this.current.y + e.offsetY * this.current.zoom);
+    this.selector = {
+      x: e.layerX,
+      y: e.layerY
+    }
   }
 
-  moveComp(e) {
+  moveComp(e, isMultipleSelected) {
     if (Object.keys(this.offset).length) {
       const validate = {
         x: (e.layerX - this.offset.x) / this.current.zoom,
@@ -595,20 +758,32 @@ export default class Workspace extends Base {
       if (validate.x < 0 || validate.y < 0) {
         return;
       }
-      const compOffset = {
-        x: validate.x - this.component.position.x,
-        y: validate.y - this.component.position.y
+      let compOffset;
+      if (isMultipleSelected) {
+        compOffset = {
+          x: e.layerX - this.selector.x,
+          y: e.layerY - this.selector.y
+        }
+        this.component.position = {
+          x: this.component.position.x + compOffset.x,
+          y: this.component.position.y + compOffset.y
+        };
+      } else {
+        compOffset = {
+          x: validate.x - this.component.position.x,
+          y: validate.y - this.component.position.y
+        }
+        this.component.position = {
+          ...validate
+        };
       }
-      this.component.position = {
-        ...validate
-      };
       if (this.component.out.length) {
         this.component.out.forEach(line => {
           this.flows.forEach(component => {
             if (component.id === line.destination) {
               component.in.forEach(comp => {
                 if (comp.source === this.component.id) {
-                  this.offsetCompLines(line, this.component, component, comp, compOffset, 'source');
+                  this.offsetLines(line, this.component, component, comp, compOffset, 'source');
                 }
               });
             }
@@ -621,7 +796,7 @@ export default class Workspace extends Base {
             if (component.id === comp.source) {
               component.out.forEach(line => {
                 if (line.destination === this.component.id) {
-                  this.offsetCompLines(line, component, this.component, comp, compOffset, 'destination');
+                  this.offsetLines(line, component, this.component, comp, compOffset, 'destination');
                 }
               });
             }
@@ -629,11 +804,11 @@ export default class Workspace extends Base {
         });
       };
       this.element.style.transform =
-        `translate(${validate.x}px, ${validate.y}px) ${this.component.type === 'condition' ? 'rotate(45deg)' : ''}`;
+        `translate(${this.component.position.x}px, ${this.component.position.y}px) ${this.component.type === 'condition' ? 'rotate(45deg)' : ''}`;
     }
   }
 
-  offsetCompLines(line, sourceComp, destinationComp, comp, compOffset, compSide) {
+  offsetLines(line, sourceComp, destinationComp, comp, compOffset, compSide) {
     const initialQuadrant = this.getDestinationQuadrant(line.initialPoints[0], line.initialPoints[line.initialPoints.length - 1]);
     const currentQuadrant = this.getDestinationQuadrant(line.position, line.points[line.points.length - 1]);
     this.moveLines(line, compOffset, compSide, comp);
@@ -671,15 +846,15 @@ export default class Workspace extends Base {
 
   // Method to remove old Node and add new permanent node to the component.
   changeNodeDirection(component, oldDirection, newDirection) {
-    const element = document.getElementById(component.id);
-    const node = document.getElementById(`node-${component.id}-${oldDirection}`);
+    // const element = this.getElementById(component.id);
+    const node = this.getElementById(`node-${component.id}-${oldDirection}`);
     if (node) {
       node.remove();
     }
-    const temp = this.tempComp;
-    this.tempComp = component;
-    element.appendChild(this.addNode(newDirection, true));
-    this.tempComp = temp;
+    // const temp = this.tempComp;
+    // this.tempComp = component;
+    // element.appendChild(this.addNode(newDirection, true));
+    // this.tempComp = temp;
   }
 
   // Method to validate component position and obtain new directions if change is required.
@@ -708,7 +883,7 @@ export default class Workspace extends Base {
 
   // Method to move lines. Checks which lines to increace/decrease on mouseMove.
   moveLines(line, offset, compSide, comp) {
-    this.lineElement = document.getElementById(line.id);
+    this.lineElement = this.getElementById(line.id);
     if (line.points.length === 1 && this.areParallelDirections(line.direction, comp.direction) && !this.crossed) {
       let midpoint = {};
       if (this.isVertical(line.direction)) {
@@ -768,7 +943,7 @@ export default class Workspace extends Base {
       this.breakLines(line, midpoint, 2);
     }
   }
-  
+
   handleLineDisplacement(line, compSide, offset, index) {
     for (let i = 0; i < line.points.length; i++) {
       if (compSide === 'destination') {
@@ -1067,7 +1242,7 @@ export default class Workspace extends Base {
         id: 'path',
         class: 'path-1',
         nativeStyle: {
-          strokeWidth: 3,
+          strokeWidth: 1,
           opacity: 1,
           fill: 'none'
         }
@@ -1078,7 +1253,7 @@ export default class Workspace extends Base {
       }, {
         id: 'arrow',
         nativeStyle: {
-          strokeWidth: 3,
+          strokeWidth: 1,
           opacity: 1,
           stroke: 'black'
         },
@@ -1163,14 +1338,14 @@ export default class Workspace extends Base {
           id: 'path',
           class: `path-${index+1}`,
           nativeStyle: {
-            strokeWidth: 3,
+            strokeWidth: 1,
             opacity: 1,
             fill: 'none'
           }
         }));
       }
       this.ce(this.lineElement.querySelector(`.path-${index+1}`), {
-        stroke: 'orangered',
+        stroke: 'black',
         ['stroke-dasharray']: e ? '5.5' : '',
         d: line,
       });
@@ -1255,15 +1430,13 @@ export default class Workspace extends Base {
     this.offset = {};
     const destination = this.highlighted && this.highlighted.dataset;
     if (destination && destination.comp !== this.component.id) {
-      let index = 0;
-      while (index < this.line.points.length) {
+      this.line.points.forEach((point, index) => {
         this.ce(this.lineElement.querySelector(`.path-${index+1}`), {
           ['stroke-dasharray']: ''
         });
-        index++;
-      };
+      });
       this.lineElement.style.cursor = 'default';
-      e.target.parentElement.classList.remove('temp');
+      // e.target.parentElement.classList.remove('temp');
       this.line.destination = destination.comp;
       this.line.initialPoints = JSON.parse(JSON.stringify([this.line.position, ...this.line.points]));
       this.component.out.push(this.line);
@@ -1290,6 +1463,35 @@ export default class Workspace extends Base {
     });
   }
 
+  undo() {
+    if (this.undoIndex > 1) {
+      this.undoIndex--;
+      this.flows = JSON.parse(this.changes[this.undoIndex - 1]);
+      this.svg.innerHTML = '';
+      this.renderComponents(this.flows);
+    }
+  }
+
+  redo() {
+    if (this.undoIndex < this.changes.length) {
+      this.undoIndex++;
+      this.flows = JSON.parse(this.changes[this.undoIndex - 1]);
+      this.svg.innerHTML = '';
+      this.renderComponents(this.flows);
+    }
+  }
+
+  addNewChanges() {
+    this.changes.splice(this.undoIndex, this.changes.length - (this.undoIndex));
+    this.changes.push(JSON.stringify(this.flows));
+    this.undoIndex++;
+  }
+
+  toggleSelectMode() {
+    this.selectMode = this.selectMode === 'Move' ? 'Select' : 'Move';
+    this.getElementById('multiSelect').classList.toggle('focus');
+  }
+
   setElemByEvent(e) {
     const rootElem = e.target.parentElement;
     if (rootElem.id.indexOf('comp') === 0) {
@@ -1302,6 +1504,8 @@ export default class Workspace extends Base {
       this.element = e.target.parentElement.parentElement;
     } else if (rootElem.id.indexOf('workspace') === 0) {
       this.element = this.workspace;
+    } else if (rootElem.id.indexOf('curve') === 0) {
+      this.element = rootElem;
     } else {
       return;
     }
@@ -1332,9 +1536,13 @@ export default class Workspace extends Base {
       }
     });
     this.renderComponents(this.flows);
+    this.addNewChanges(this.flows);
     return [this.workspace, new Tools({
       zoom: this.zoom.bind(this),
-      reset: this.reset.bind(this)
+      reset: this.reset.bind(this),
+      undo: this.undo.bind(this),
+      redo: this.redo.bind(this),
+      toggleSelectMode: this.toggleSelectMode.bind(this),
     }).create()];
   }
 
@@ -1348,11 +1556,13 @@ export default class Workspace extends Base {
     e.preventDefault();
     this.closeMenuOptions();
     this.setElemByEvent(e);
-    if (this.element.id.indexOf('line') === 0) {
-      //
-    } else if (this.element.id.indexOf('comp') === 0) {
+    if (this.element.id.indexOf('comp') === 0) {
       this.component = this.getComponentById(this.flows, this.element.id);
+    } else if (this.element.id.indexOf('linecomp') === 0) {
+      // this.component = this.getComponentById(this.flows, this.element.dataset.comp);
+      this.component = this.getComponentById(this.flows, this.element.dataset.comp).out[0];
     } else {
+      this.clearComponent();
       return;
     }
     let menuItems = [];
@@ -1372,8 +1582,8 @@ export default class Workspace extends Base {
         innerHTML: "Edit"
       }
     }));
-    menuItems.push(deleteMenu().bind(this));
-    this.component.id.indexOf('line') === -1 && menuItems.push(editMenu().bind(this));
+    menuItems.push(deleteMenu());
+    this.component.id.indexOf('line') === -1 && menuItems.push(editMenu());
     this.menuOptions = this.ce('div', {
       id: 'menuOptions',
       style: `transform: translate(${e.x}px, ${e.y}px)`
@@ -1386,20 +1596,42 @@ export default class Workspace extends Base {
   // Delete the component
   deleteMenu(e) {
     this.closeMenuOptions();
-    if (this.line) {
-      this.getElementById(this.line.id).remove();
-      const source = this.getComponentById(this.flows, this.component.id).out;
-      source.splice(source.indexOf(this.line), 1);
-      const destination = this.getComponentById(this.flows, this.line.destination).in;
-      destination.find((dest, index) => {
-        if (dest.source === source.id) {
-          destination.splice(index, 1);
+    if (this.component.id.indexOf('line') === 0) {
+      const line = this.getElementById(this.component.id)
+      line.remove();
+      const source = this.getComponentById(this.flows,
+        this.component.id.substring(4, this.component.id.length - 2));
+      source.out.map((line, index) => {
+        if (line.id === this.component.id) {
+          source.out.splice(index, 1);
         }
       });
+      const destination = this.getComponentById(this.flows, this.component.destination);
+      destination.in.map((comp, index) => {
+        if (comp.source === source.id) {
+          destination.in.splice(index, 1);
+        }
+      });
+      // If comp is used instead of line
+      // this.getElementById(this.component.id).remove();
+      // const source = this.getComponentById(this.flows, this.component.id).out;
+      // source.splice(source.indexOf(this.line), 1);
+      // const destination = this.getComponentById(this.flows, this.line.destination).in;
+      // destination.find((dest, index) => {
+      //   if (dest.source === source.id) {
+      //     destination.splice(index, 1);
+      //   }
+      // });
     } else {
-      this.getElementById(this.component.id).remove();
       this.flows.splice(this.flows.indexOf(this.component), 1);
+      this.clearComponent();
+      if (this.storage.instance) {
+        this.modal.remove();
+        this.storage.instance = null;
+      }
     }
+    this.renderComponents(this.flows);
+
   }
 
   // Open the component Modal
@@ -1410,6 +1642,6 @@ export default class Workspace extends Base {
 
   // Close the menu options while clicking other than components.
   closeMenuOptions(e) {
-    this.menuOptions && this.menuOptions.remove();
+    this.menuOptions && this.menuOptions.remove(), this.menuOptions = null;
   }
 }

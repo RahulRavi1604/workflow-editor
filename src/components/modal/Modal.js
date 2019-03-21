@@ -45,7 +45,7 @@ export default class Modal extends Base {
       }, this.ce('span', {
         style: 'color: black; cursor: pointer;',
         keys: {
-          innerHTML: '&#8609;'
+          innerHTML: '&#11208;'
         }
       })),
       this.ce('div', {
@@ -87,7 +87,7 @@ export default class Modal extends Base {
       ])
     ]);
     const timeout = setTimeout(() => {
-      this.modal.style.height = '500px';
+      this.modal.style.width = '25%';
       clearTimeout(timeout)
     }, 1);
     return this.modal;
@@ -95,7 +95,7 @@ export default class Modal extends Base {
 
   close() {
     this.modal.innerHTML = "";
-    this.modal.style.height = 0;
+    this.modal.style.width = 0;
     const timeout = setTimeout(() => {
       this.modal.remove();
       clearTimeout(timeout)

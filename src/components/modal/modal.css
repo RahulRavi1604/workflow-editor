@@ -2,13 +2,12 @@
   position: absolute;
   right: 10px;
   bottom: 10px;
-  width: 25%;
-  height: 1px;
+  width: 1px;
+  height: 95%;
   background: #fefefe;
-  transition: height 0.5s;
-  min-width: 350px;
+  transition: width 0.2s;
   border-radius: 5px;
-  box-shadow: 1px 5px 20px #393939;
+  box-shadow: 1px 5px 20px #afafaf;
   transition-timing-function: ease-in-out;
 }
 
